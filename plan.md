@@ -1,23 +1,21 @@
-# HOOMD GUI 구현 계획
+# HOOMD GUI Implementation Plan
 
-> 이 문서는 구현 순서와 완료 기준을 정리한 한글 작업 계획서다. 제품 개념과 장기 기능 범위는 `readme.md`를 기준으로 한다.
+> This public plan defines the initial implementation sequence for a web-based HOOMD-blue interface that executes simulations on the user's computer.
 
-## 0. 개발 언어 규칙
+## 0. Project Conventions
 
-이 프로젝트에서는 다음 규칙을 반드시 지킨다.
+The project will use English consistently in all implementation artifacts.
 
-- `plan.md`는 한글로 작성한다.
-- 모든 소스 코드는 영어로 작성한다.
-- 변수명, 함수명, 클래스명, 모듈명, 파일명은 영어로 작성한다.
-- 모든 코드 주석과 docstring은 영어로 작성한다.
-- 오류 메시지, 로그 메시지, 테스트 이름과 assertion 메시지는 영어로 작성한다.
-- API 필드명과 JSON 키는 영어로 작성한다.
-- 기본 UI 문구와 접근성 레이블은 영어로 작성한다.
-- 개발자용 기술 문서와 커밋 메시지는 영어로 작성한다.
-- 한글은 이 계획서와 향후 명시적으로 요청된 사용자용 번역에만 사용한다.
-- 코드에 한글 주석을 추가하지 않는다.
+- All source code must be written in English.
+- File, module, class, function, variable, and API field names must be English.
+- All code comments and docstrings must be English.
+- Error messages, log messages, test names, and assertion messages must be English.
+- Default UI copy and accessibility labels must be English.
+- Developer documentation and commit messages must be English.
+- Generated HOOMD-blue scripts and comments must be English.
+- Translations may be added as separate user-facing resources later.
 
-예시:
+Example:
 
 ```python
 def calculate_pair_force(distance: float) -> float:
@@ -25,27 +23,97 @@ def calculate_pair_force(distance: float) -> float:
     return 0.0
 ```
 
-## 1. 개발 환경과 가상환경 설정
+## 1. Product Architecture
 
-첫 번째 작업은 애플리케이션 코드를 작성하는 것이 아니라 재현 가능한 개발환경을 만드는 것이다.
+The application will use a local-first hybrid architecture.
 
-### 1.1 환경 관리 방식
+```text
+Public Web Demo
+      |
+      | Project JSON and connection status
+      v
+Local Runner on 127.0.0.1
+      |
+      |- Python core
+      |- Validation and code generation
+      |- HOOMD-blue CPU/GPU execution
+      `- Local GSD and log files
+```
 
-HOOMD-blue 공식 바이너리는 conda-forge를 통해 Pixi, Micromamba 또는 Mamba로 설치할 수 있다. 초기 구현에서는 환경 정의와 lockfile 관리가 간단한 **Pixi를 우선 선택**한다.
+The public website will provide the interface, documentation, examples, and an installation path. Real simulations will execute on the user's computer through a small local Python service.
 
-- 초기 HOOMD-blue 대상 버전: `7.1.2`
-- 초기 실행 대상: macOS ARM64 CPU
-- Python 후보 버전: `3.12`
-- GPU 환경은 CPU 환경이 안정화된 이후 별도 profile로 추가한다.
-- 일반적인 `python -m venv`만으로 HOOMD-blue를 설치하려 하지 않는다.
-- HOOMD-blue와 네이티브 의존성은 conda-forge 패키지로 관리한다.
-- Python 패키지 메타데이터와 자체 코어 패키지는 `pyproject.toml`로 관리한다.
+### 1.1 Public Demo Mode
 
-공식 설치 참고 문서:
+The public website must work without installing Python or HOOMD-blue.
+
+It will provide:
+
+- A two-dimensional particle editor.
+- Built-in example projects.
+- An interaction editor and potential preview.
+- Browser-side validation for basic input errors.
+- Generated-code previews.
+- Clearly labeled illustrative motion and sample trajectories.
+- Project JSON import and export.
+- Local Runner installation and connection instructions.
+
+The public demo must never represent illustrative motion as a real simulation result.
+
+### 1.2 Local Simulation Mode
+
+The Local Runner will provide:
+
+- Authoritative project validation.
+- HOOMD-blue code generation.
+- CPU/GPU capability detection.
+- Isolated simulation processes.
+- Progress and thermodynamic data streaming.
+- Local GSD, checkpoint, and log storage.
+- Trajectory access for the web viewer.
+
+The initial implementation should let the Local Runner serve the same web UI at a loopback address. This same-origin design avoids unnecessary browser permission and CORS complexity. Direct connections from the public website can be added later with explicit pairing and origin controls.
+
+## 2. Development Environment
+
+The first implementation task is to create a reproducible Python environment before building the web interface.
+
+### 2.1 Environment Choice
+
+- Environment manager: Pixi
+- Initial Python candidate: Python 3.12
+- Initial HOOMD-blue target: 7.1.2
+- Package source: conda-forge
+- First platform: macOS ARM64 CPU
+- GPU environments: separate profiles after the CPU workflow is stable
+- Python package metadata: `pyproject.toml`
+
+HOOMD-blue and its native dependencies should be installed through conda-forge rather than relying on a plain `python -m venv` workflow.
+
+Official installation reference:
 
 - <https://hoomd-blue.readthedocs.io/en/latest/installation.html>
 
-### 1.2 생성할 파일
+### 2.2 Initial Dependencies
+
+Runtime:
+
+- `python`
+- `hoomd`
+- `numpy`
+- `pydantic`
+- `fastapi`
+- `uvicorn`
+
+Development:
+
+- `pytest`
+- `ruff`
+- `mypy`
+- `httpx`
+
+Frontend build tools are not required for the initial static demonstration.
+
+### 2.3 Environment Deliverables
 
 ```text
 HOOMD_GUI/
@@ -62,55 +130,31 @@ HOOMD_GUI/
    `- test_environment.py
 ```
 
-### 1.3 초기 환경 의존성
+`scripts/check_environment.py` should report:
 
-필수 런타임 후보:
+- Python version.
+- Operating system and CPU architecture.
+- HOOMD-blue version.
+- CPU/GPU device availability.
+- Core dependency versions.
+- Import status for the project package.
 
-- `python`
-- `hoomd`
-- `numpy`
-- `pydantic`
-- `fastapi`
-- `uvicorn`
+The script must not dump complete environment variables or sensitive paths.
 
-개발 도구 후보:
+### 2.4 Environment Acceptance Criteria
 
-- `pytest`
-- `ruff`
-- `mypy`
-- `httpx`
+- A new checkout can create the environment with one documented command.
+- The lockfile is committed.
+- `import hoomd` succeeds.
+- A CPU `Simulation` object can be created.
+- Pytest, Ruff, and Mypy run successfully.
+- Environment failures produce clear English messages.
 
-초기 단계에서는 필요한 패키지만 추가하며, 프런트엔드 빌드 도구는 설치하지 않는다.
+## 3. Python Core and Project Schema
 
-### 1.4 환경 확인 스크립트
+The Python core will be independent of the browser and API layers.
 
-`scripts/check_environment.py`는 다음 정보를 영어로 출력해야 한다.
-
-- Python 버전
-- 운영체제와 CPU 아키텍처
-- HOOMD-blue 버전
-- CPU/GPU 장치 생성 가능 여부
-- 설치된 핵심 패키지 버전
-- 프로젝트 코어 패키지 import 가능 여부
-
-민감한 경로나 환경변수 전체를 로그로 출력하지 않는다.
-
-### 1.5 1단계 완료 기준
-
-- 새 checkout에서 한 명령으로 환경을 설치할 수 있다.
-- lockfile이 생성되고 Git에 포함된다.
-- `hoomd` import가 성공한다.
-- 간단한 CPU `Simulation` 객체를 생성할 수 있다.
-- `pytest`가 실행된다.
-- `ruff`와 `mypy`가 실행된다.
-- 환경 확인 스크립트가 실패 원인을 영어로 설명한다.
-- 설치와 검증 명령이 `readme.md`에 추가된다.
-
-## 2. Python 코어 골격
-
-웹 UI보다 먼저 물리 모델과 프로젝트 데이터를 표현하는 Python 코어를 만든다.
-
-### 2.1 패키지 구조
+### 3.1 Initial Package Structure
 
 ```text
 python/hoomd_gui_core/
@@ -136,52 +180,70 @@ python/hoomd_gui_core/
    `- project_json.py
 ```
 
-### 2.2 최소 데이터 모델
+### 3.2 Initial Project Model
 
-첫 번째 스키마에는 다음 항목만 포함한다.
+The first schema will include:
 
-- 프로젝트 이름과 schema version
-- 2D/3D simulation box
-- 입자 타입
-- 입자 위치와 직경
-- display layer
-- A-A, A-B, B-B pair interaction
-- `dt`, `kT`, step 수
-- device preference
-- trajectory와 log 저장 주기
+- Project name and schema version.
+- A two-dimensional simulation box.
+- Particle types.
+- Circular particle positions and diameters.
+- Display layers.
+- Type-pair interactions.
+- Simulation mode.
+- `dt`, `kT`, step count, and random seed.
+- Device preference.
+- Trajectory and log periods.
 
-### 2.3 핵심 원칙
+### 3.3 Core Design Rules
 
-- UI 상태가 아니라 과학적 프로젝트 모델을 source of truth로 사용한다.
-- Pydantic 모델과 JSON schema를 함께 제공한다.
-- schema version을 모든 프로젝트 파일에 저장한다.
-- serialization 결과가 입력 순서에 따라 달라지지 않도록 한다.
-- HOOMD 객체를 프로젝트 모델 내부에 직접 저장하지 않는다.
-- Python 코어는 HTML, 브라우저 또는 FastAPI를 import하지 않는다.
+- The scientific project model is the source of truth.
+- Pydantic models provide a versioned JSON schema.
+- Every saved project includes a schema version.
+- Serialization is deterministic.
+- HOOMD-blue objects are never stored directly in project files.
+- The Python core does not import browser, UI, or FastAPI modules.
+- UI-only properties are kept separate from physical properties.
 
-### 2.4 2단계 완료 기준
+### 3.4 Core Acceptance Criteria
 
-- 예제 프로젝트를 Python 객체와 JSON 사이에서 round trip할 수 있다.
-- 잘못된 box, 질량, 직경, timestep을 검출한다.
-- 동일 입력으로 항상 동일한 JSON을 생성한다.
-- 최소 프로젝트의 HOOMD Python script를 생성한다.
-- 모델, 검증기, serializer에 단위 테스트가 있다.
+- Example projects round-trip between Python objects and JSON.
+- Invalid box, particle, interaction, and run values are rejected.
+- Identical inputs produce identical serialized output.
+- A minimal project generates a readable HOOMD-blue script.
+- Models, validation, serialization, and code generation have tests.
 
-## 3. 정적 HTML 웹 데모
+## 4. Two-Dimensional Particle Editor
 
-첫 번째 공개 화면은 설치 없이 브라우저에서 확인할 수 있는 정적 데모로 만든다.
+The first visual environment will be two-dimensional.
 
-### 3.1 기술 범위
+### 4.1 Technology
 
 - HTML5
 - CSS
 - JavaScript ES modules
-- 초기에는 Node.js와 번들러를 요구하지 않는다.
-- 정적 파일 서버와 GitHub Pages에서 실행 가능해야 한다.
-- 3D가 반드시 필요한 시점에 고정 버전의 Three.js를 추가한다.
-- 첫 화면은 Canvas 또는 SVG 기반의 가벼운 입자 preview로 시작할 수 있다.
+- Canvas 2D for the first viewport
+- No mandatory Node.js or bundler
+- Static-server and GitHub Pages compatibility
 
-### 3.2 첫 화면 구성
+Three.js may be introduced later when three-dimensional editing becomes a real requirement.
+
+### 4.2 Initial Viewport Features
+
+- A rectangular simulation box.
+- Simulation-to-screen coordinate conversion.
+- Grid, zoom, and pan.
+- Add circular particles by clicking.
+- Select, drag, duplicate, and delete particles.
+- Multi-selection.
+- Direct coordinate input.
+- Overlap and out-of-bounds highlighting.
+- Undo and redo.
+- Optional periodic-image preview.
+
+All particle positions must be stored in simulation coordinates, not screen pixels.
+
+### 4.3 Initial Layout
 
 ```text
 +---------------------------------------------------------------+
@@ -196,180 +258,286 @@ python/hoomd_gui_core/
 +---------------------------------------------------------------+
 ```
 
-### 3.3 최소 상호작용
+## 5. Particle Types and Properties
 
-- particle 선택
-- particle 추가와 삭제
-- drag를 이용한 위치 변경
-- type A/B 변경
-- diameter와 color 변경
-- 2D/3D box 크기 설정
-- LJ 또는 custom `U(r)` 선택
-- potential curve preview
-- `dt`, `kT`, steps 변경
-- 프로젝트 JSON 다운로드
-- 생성 예정 HOOMD script preview
-- sample trajectory 재생
+The initial model will use type-level physical properties.
 
-정적 데모의 Run 버튼은 실제 계산으로 오해되지 않도록 `Play Sample` 또는 `Preview Motion`으로 표시한다.
+Example:
 
-### 3.4 3단계 완료 기준
+| Type | Diameter | Mass | Display Color |
+| --- | ---: | ---: | --- |
+| A | 1.0 | 1.0 | Blue |
+| B | 1.5 | 2.0 | Orange |
 
-- URL을 연 뒤 설치 없이 주요 아이디어를 이해할 수 있다.
-- 데스크톱과 태블릿 폭에서 핵심 패널을 사용할 수 있다.
-- 키보드로 주요 form control에 접근할 수 있다.
-- sample 프로젝트를 불러오고 수정할 수 있다.
-- JSON export 결과가 Python 코어 schema와 일치한다.
-- 데모 결과가 실제 HOOMD 계산인지 illustrative animation인지 명확히 표시한다.
+The application must distinguish:
 
-## 4. 웹과 Python 코어 연결
+- Display radius.
+- Hard-particle diameter.
+- Pair-potential length scale such as `sigma`.
 
-정적 데모가 안정화된 후 FastAPI를 얇은 adapter로 추가한다.
+Initial properties:
 
-### 4.1 API 범위
+- Stable particle ID.
+- Particle type.
+- Position.
+- Diameter defined by type.
+- Mass defined by type for MD.
+- Display color and visibility.
+- Fixed or mobile state.
+- Display layer.
 
-- `GET /api/health`
-- `GET /api/schema`
-- `POST /api/projects/validate`
-- `POST /api/projects/compile`
-- `POST /api/interactions/preview`
-- `POST /api/runs`
-- `GET /api/runs/{run_id}`
-- `DELETE /api/runs/{run_id}`
-- run progress용 WebSocket 또는 server-sent events
+Per-particle physical overrides will be considered after the type-based compiler is stable.
 
-### 4.2 연결 원칙
+## 6. Simulation Modes
 
-- API request와 response는 영어 JSON key를 사용한다.
-- 오류는 안정적인 code와 영어 message를 제공한다.
-- 웹 UI는 HOOMD Python 객체를 알 필요가 없다.
-- 실행 요청은 UI/server process와 분리된 worker에서 처리한다.
-- Static Demo Mode는 API가 없어도 계속 동작해야 한다.
-- API가 연결되면 UI에 `Python Connected` 상태를 명확히 표시한다.
+Hard and soft particles must not be presented as interchangeable potential choices. They use different simulation algorithms.
 
-### 4.3 4단계 완료 기준
+### 6.1 Hard Disk Mode
 
-- 브라우저 프로젝트를 Python validator로 검증할 수 있다.
-- Python이 생성한 script를 웹에서 확인할 수 있다.
-- API 연결 실패 시 정적 데모로 안전하게 돌아간다.
-- long-running simulation이 웹 서버를 차단하지 않는다.
+- Backend: HPMC Sphere integrator in a 2D box.
+- Physical object: hard disk.
+- Primary parameters: type diameter, trial move size, move count, and random seed.
+- Overlap is forbidden.
+- There is no continuous force curve for the hard core.
 
-## 5. 실제 HOOMD 실행
+### 6.2 Soft Disk Mode
 
-Python-connected mode에서 작은 CPU simulation부터 실행한다.
+- Backend: molecular dynamics.
+- Primary parameters: mass, timestep, thermostat, temperature, and pair potential.
+- Continuous potential energy and force curves are available.
+- The first interaction should be a simple repulsive or Lennard-Jones model.
 
-### 5.1 초기 지원 범위
+Soft Disk MD is the recommended first executable backend because it exercises the interaction editor, parameter validation, code generator, timestep settings, and result logging. Hard Disk HPMC should follow as a separate mode.
 
-- 구형 입자
-- 2D/3D orthorhombic box
-- Lennard-Jones pair potential
-- constant-volume thermostat
-- CPU device
-- GSD trajectory
-- 기본 thermodynamic log
-- run cancel과 checkpoint
+## 7. Interaction Editor
 
-### 5.2 실행 안전장치
+Interactions will be assigned through a symmetric particle-type matrix.
 
-- particle 수 제한
-- 최대 step 수 제한
-- maximum wall time
-- output 파일 크기 추정
-- subprocess isolation
-- run별 독립 output directory
-- 사용자 Python 코드는 초기 버전에서 실행 금지
+```text
+          A                B
+A         Soft Repulsion   Lennard-Jones
+B         Lennard-Jones    None
+```
 
-### 5.3 5단계 완료 기준
+Initial interaction choices:
 
-- 웹에서 제출한 작은 프로젝트가 실제 HOOMD run으로 이어진다.
-- 진행률, timestep, temperature와 energy가 표시된다.
-- 완료된 GSD trajectory를 다시 재생할 수 있다.
-- 실패한 run의 원인을 영어 메시지로 확인할 수 있다.
+1. None
+2. Soft repulsion
+3. Lennard-Jones
+4. Hard disk in HPMC mode
+5. Custom `U(r)` in a later milestone
 
-## 6. 커스텀 상호작용
+The editor will expose potential-specific fields such as:
 
-커스텀 상호작용은 내장 potential이 안정화된 후 단계적으로 추가한다.
+- `epsilon`
+- `sigma`
+- `r_cut`
+- shift or smoothing mode
+- potential curve
+- force curve
 
-### 6.1 첫 번째 버전
+Every required type pair must be complete before execution.
 
-- 제한된 수식 문법으로 `U(r)` 입력
-- 허용 함수와 변수 whitelist
-- `F(r) = -dU/dr` 계산
-- `r_min`, `r_cut`, resolution 설정
-- potential과 force 그래프
-- HOOMD table 생성
-- two-particle reference test
+## 8. Particle Generators
 
-### 6.2 검증
+In addition to manual placement, the editor will provide:
 
-- `NaN`과 infinity 검출
-- singularity 경고
-- cutoff 연속성 검사
-- 입력 force와 numerical derivative 비교
-- 단위 차원 검사
-- type pair별 parameter 누락 검사
+- Single-particle placement.
+- Rectangular lattice generation.
+- Uniform random placement.
+- Type ratios.
+- Particle spacing.
+- Minimum-distance constraints.
+- Random seed.
+- Clear and regenerate actions.
 
-### 6.3 후속 범위
+The random seed must be saved to make initial configurations reproducible.
 
-- CSV table import
-- custom bonded interaction
-- anisotropic interaction
-- Python custom force
-- C++/GPU plugin
+## 9. Run Parameters and Validation
 
-실행 가능한 custom Python이나 native plugin은 명시적인 사용자 승인 없이 불러오거나 실행하지 않는다.
+### 9.1 Molecular Dynamics Parameters
 
-## 7. 테스트와 품질 관리
+- `dt`
+- `kT`
+- Total steps
+- Computed simulated time
+- Thermostat
+- Random seed
+- CPU/GPU preference
+- Trajectory period
+- Log period
 
-### 7.1 Python
+### 9.2 Hard Particle Parameters
 
-- model과 serializer unit test
-- validator unit test
-- generated code golden test
-- two-particle energy/force comparison
-- API integration test
-- worker cancel과 timeout test
+- Translation move size
+- Trial moves per timestep
+- `kT`
+- Total steps
+- Random seed
+- Overlap count
 
-### 7.2 웹
+MD time and Monte Carlo timesteps must be labeled as different concepts.
 
-- project store unit test
-- JSON import/export test
-- 주요 사용자 흐름 browser test
-- responsive layout 확인
-- keyboard accessibility 확인
-- API unavailable 상태 확인
+### 9.3 Preflight Validation
 
-### 7.3 공통 완료 조건
+- Particle overlaps.
+- Particles outside the box.
+- Invalid diameter or mass.
+- Missing type-pair interactions.
+- Invalid cutoff values.
+- Suspicious MD timesteps.
+- Empty systems.
+- Unsupported combinations of simulation mode and interaction.
+- Estimated particle count, output size, and runtime limits.
 
-- 새 기능에는 자동화 테스트가 포함된다.
-- lint, type check, test가 모두 통과한다.
-- 생성 코드와 주석은 모두 영어다.
-- 예제 프로젝트가 현재 schema version과 일치한다.
-- 주요 과학적 가정이 문서화된다.
+Validation messages must point to the relevant particle or control.
 
-## 8. 배포 순서
+## 10. Local Runner and API
 
-1. 정적 데모를 GitHub Pages에 배포한다.
-2. Python 코어를 로컬 CLI로 먼저 검증한다.
-3. FastAPI를 로컬 연결 모드로 제공한다.
-4. 제한된 공개 Python backend를 별도 서비스로 검토한다.
-5. GPU와 원격 HPC 기능은 로컬 CPU workflow가 안정화된 뒤 추가한다.
+The Local Runner will bind only to a loopback address.
 
-공개 backend를 제공할 때는 실행시간, particle 수, storage, rate limit과 임의 코드 실행 위험을 먼저 통제해야 한다.
+```text
+http://127.0.0.1:8787
+```
 
-## 9. 즉시 실행할 작업
+Initial endpoints:
 
-다음 작업 세션에서는 **1단계만 구현**한다.
+```text
+GET    /api/health
+GET    /api/version
+GET    /api/schema
+POST   /api/projects/validate
+POST   /api/projects/compile
+POST   /api/interactions/preview
+POST   /api/runs
+GET    /api/runs/{run_id}
+DELETE /api/runs/{run_id}
+WS     /api/runs/{run_id}/events
+```
 
-1. Pixi 설치 가능 여부 확인
-2. `pixi.toml` 생성
-3. HOOMD-blue `7.1.2` CPU 환경 구성
-4. `pyproject.toml`과 Python 패키지 골격 생성
-5. `.gitignore` 생성
-6. `scripts/check_environment.py` 작성
-7. 최소 `pytest`, `ruff`, `mypy` 설정
-8. 환경 설치 및 import 검증
-9. 설치 절차를 `readme.md`에 반영
-10. 변경 사항 commit 및 push
+### 10.1 Security Requirements
 
-1단계가 통과하기 전에는 웹 UI 구현을 시작하지 않는다.
+- Bind to `127.0.0.1`, never `0.0.0.0` by default.
+- Use explicit allowed origins.
+- Do not use wildcard CORS for authenticated requests.
+- Require a short-lived pairing token.
+- Authenticate WebSocket connections.
+- Accept project JSON, not arbitrary Python code.
+- Generate executable code only inside the trusted local core.
+- Require confirmation before starting a simulation.
+- Use a separate output directory for every run.
+- Limit particle count, step count, wall time, and output size.
+- Keep project and result files local unless the user explicitly uploads them.
+
+## 11. HOOMD-blue Execution
+
+The first real run will support:
+
+- Circular particles in a 2D orthorhombic box.
+- Soft Disk MD.
+- One built-in pair potential.
+- Constant-volume thermostatted integration.
+- CPU execution.
+- GSD trajectories.
+- Basic thermodynamic logging.
+- Run cancellation and checkpoints.
+
+### 11.1 Execution Acceptance Criteria
+
+- A browser project can launch a real local HOOMD-blue run.
+- Progress, timestep, temperature, and energy are visible.
+- The web server remains responsive during the run.
+- The result trajectory can be replayed.
+- Failed runs produce clear English error messages.
+
+## 12. Custom Interactions
+
+Custom interactions will be added after one built-in soft interaction is fully validated.
+
+The first version will support:
+
+- A restricted expression language for `U(r)`.
+- A documented allowlist of variables and functions.
+- Calculation of `F(r) = -dU/dr`.
+- `r_min`, `r_cut`, and table resolution.
+- Potential and force previews.
+- HOOMD table generation.
+- Two-particle reference tests.
+
+Validation will include:
+
+- `NaN` and infinity detection.
+- Singularity warnings.
+- Cutoff continuity checks.
+- Supplied-force versus numerical-derivative comparison.
+- Dimensional consistency.
+- Type-pair parameter completeness.
+
+Later extensions may include table import, custom bonded interactions, anisotropic interactions, Python custom forces, and compiled CPU/GPU plugins.
+
+Executable custom Python or native plugins must never run without explicit user approval.
+
+## 13. Testing and Quality
+
+Python tests:
+
+- Model and serializer tests.
+- Validator tests.
+- Generated-code golden tests.
+- Two-particle energy and force comparisons.
+- API integration tests.
+- Worker cancellation and timeout tests.
+
+Web tests:
+
+- Project-store tests.
+- JSON import/export tests.
+- Primary user-flow browser tests.
+- Responsive-layout checks.
+- Keyboard-accessibility checks.
+- API-unavailable fallback tests.
+
+Every new feature must include appropriate automated tests. Lint, type checking, and tests must pass before a milestone is complete.
+
+## 14. Deployment Sequence
+
+1. Publish the static demonstration.
+2. Validate the Python core as a local CLI.
+3. Serve the web UI and API from the Local Runner.
+4. Add optional pairing from the public website.
+5. Consider a resource-limited public Python backend only after local execution is stable.
+6. Add GPU and remote HPC features after the local CPU workflow is reliable.
+
+## 15. First Public Demo Acceptance Scenario
+
+A visitor should be able to:
+
+1. Open the project from a URL without installing software.
+2. Create a two-dimensional simulation box.
+3. Add and move circular particles.
+4. Create particle types A and B.
+5. Set type colors, diameters, and masses.
+6. Configure A-A, A-B, and B-B interactions.
+7. Inspect potential and force curves.
+8. Set temperature, timestep, and step count.
+9. Resolve overlap and configuration warnings.
+10. Preview the generated HOOMD-blue script.
+11. Export the project JSON.
+12. Play a clearly labeled illustrative trajectory.
+
+## 16. Immediate Next Milestone
+
+The next implementation session will complete only the development-environment milestone.
+
+1. Check Pixi availability.
+2. Create `pixi.toml`.
+3. Resolve and lock a HOOMD-blue 7.1.2 CPU environment.
+4. Create `pyproject.toml` and the Python package skeleton.
+5. Expand `.gitignore` for generated environment and runtime files.
+6. Add `scripts/check_environment.py`.
+7. Configure minimal Pytest, Ruff, and Mypy checks.
+8. Verify installation and imports.
+9. Document setup commands in `readme.md`.
+10. Commit and push the verified environment.
+
+Web UI implementation will not begin until this milestone passes.
