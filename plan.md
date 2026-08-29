@@ -1,5 +1,7 @@
 # HOOMD GUI Implementation Plan
 
+<!-- plan.ko.md sha256: 043f88ca89c7f4ff674473eda04a9817a4601ad78c0290d19f9e0e7534c3822b -->
+
 > This public plan defines the initial implementation sequence for a web-based HOOMD-blue interface that executes simulations on the user's computer.
 
 ## 0. Project Conventions
@@ -22,6 +24,20 @@ def calculate_pair_force(distance: float) -> float:
     """Return the radial force at the given distance."""
     return 0.0
 ```
+
+### 0.1 Local and Public Plan Synchronization
+
+`plan.ko.md` is the local Korean planning source and is excluded from Git. `plan.md` is the public English plan and is committed to the repository.
+
+Whenever `plan.ko.md` changes:
+
+1. Review the Korean changes.
+2. Update the corresponding English content in `plan.md` during the same work session.
+3. Run `python3 scripts/record_plan_sync.py --confirm` after verifying the translation and intent.
+4. Run `python3 scripts/check_plan_sync.py`.
+5. Commit only the public English plan and workflow files.
+
+The repository pre-commit hook compares the SHA-256 digest of the local Korean plan with the synchronization marker in this file. A mismatch blocks the commit. The digest detects that the Korean source changed; it does not verify translation quality, so human or agent review remains required.
 
 ## 1. Product Architecture
 
