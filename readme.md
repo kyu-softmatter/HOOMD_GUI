@@ -11,6 +11,8 @@
 
 This repository currently describes a product concept and implementation roadmap. The application has not been implemented yet.
 
+The first planned deliverable is a lightweight public web demonstration that runs in a standard browser without installation. The scientific core will remain a reusable Python package and will be connected to the web interface through an API in a later milestone.
+
 The initial compatibility target is HOOMD-blue 7.x. Each application release should pin and test an exact HOOMD-blue version so that generated scripts remain reproducible.
 
 ## Overview
@@ -47,6 +49,49 @@ The GUI should never hide the physical model behind purely visual abstractions. 
 - Students learning particle simulation.
 - Engineers exploring particle-based models.
 - Existing HOOMD-blue users who want faster setup, inspection, and parameter management.
+
+## Web-First Demonstration Strategy
+
+The first product goal is not a complete simulation platform. It is a simple, shareable web demonstration that communicates the interaction model and allows potential users to understand the idea from a URL.
+
+The project should provide two modes that use the same project schema:
+
+### Static Demo Mode
+
+Static Demo Mode should run entirely in the browser and be deployable to a static host such as GitHub Pages.
+
+It should allow visitors to:
+
+- Open the demo without installing Python or HOOMD-blue.
+- Create a box and place a small number of particle objects.
+- Move, rotate, duplicate, select, hide, and recolor objects.
+- Create particle types and display layers.
+- Edit basic box, temperature, timestep, and run-length fields.
+- Configure a small built-in or custom `U(r)` interaction.
+- Preview the potential and force curves.
+- Inspect a generated HOOMD-blue Python script.
+- Play a bundled sample trajectory or a lightweight illustrative animation.
+- Download the project as JSON.
+
+This mode does not execute HOOMD-blue. Its purpose is UI demonstration, model editing, code preview, and feedback collection.
+
+### Python-Connected Mode
+
+Python-Connected Mode should use the same HTML interface while connecting to a local or hosted Python service.
+
+The Python core should provide:
+
+- Authoritative project-schema validation.
+- Geometry and particle generation.
+- Custom-interaction parsing and table generation.
+- HOOMD-blue Python code generation.
+- Simulation worker management.
+- GSD and log-file processing.
+- Analysis utilities.
+
+The browser should communicate with this service through a small versioned JSON API and WebSocket or server-sent events for run progress. Keeping these responsibilities in Python makes the scientific code independently testable and usable from the command line, notebooks, or a future desktop application.
+
+HOOMD-blue should not be treated as a browser dependency. A real HOOMD run requires the Python-connected mode or an external execution service; the static demo should clearly label illustrative or prerecorded results.
 
 ## Intended Workflow
 
@@ -438,72 +483,90 @@ Later analysis can integrate tools such as `freud` for radial distribution funct
 ## Proposed Architecture
 
 ```text
-+------------------------------+
-| React + TypeScript UI        |
-| Three.js instanced viewport  |
-+---------------+--------------+
-                | validated commands / project documents
-+---------------v--------------+
-| Python application service   |
-| Pydantic schema + compiler   |
-| Geometry conversion          |
-| Validation engine            |
-+---------------+--------------+
-                | generated package / process messages
-+---------------v--------------+
-| Isolated simulation worker   |
-| HOOMD-blue                   |
-| GSD + HDF5/CSV logging       |
-+---------------+--------------+
-                | trajectories and live metrics
-+---------------v--------------+
-| Result cache and viewer      |
-+------------------------------+
++--------------------------------------+
+| Web browser                          |
+| HTML + CSS + JavaScript modules      |
+| Three.js viewport                    |
++------------------+-------------------+
+                   |
+        +----------+----------+
+        |                     |
+        v                     v  HTTP / WebSocket
++------------------+   +--------------------------+
+| Static Demo Mode |   | Python API service       |
+| Project JSON     |   | FastAPI                   |
+| Sample results   |   +-------------+------------+
+| No backend       |                 |
++------------------+                 v
+                          +--------------------------+
+                          | Reusable Python core     |
+                          | Schema + validation      |
+                          | Geometry + compiler      |
+                          | Interaction builder      |
+                          +-------------+------------+
+                                        |
+                                        v
+                          +--------------------------+
+                          | Isolated HOOMD worker    |
+                          | GSD + HDF5/CSV outputs   |
+                          +--------------------------+
 ```
+
+The web interface should depend only on the versioned project/API contract, not on HOOMD-specific Python objects. The Python core should not import web-server or UI code.
 
 ### Suggested Technology Stack
 
 | Area | Suggested technology |
 | --- | --- |
-| UI | React, TypeScript |
+| Initial UI | HTML5, CSS, modern JavaScript modules |
 | 3D rendering | Three.js with GPU instancing |
-| Application state | Zustand or Redux Toolkit |
+| Initial application state | Plain JavaScript store using the project schema |
+| Later UI scaling option | TypeScript and React if component complexity requires it |
 | Schema and validation | Pydantic |
-| Local API | FastAPI or direct IPC |
+| Python API | FastAPI with JSON and WebSocket endpoints |
 | Simulation | HOOMD-blue |
 | Trajectory storage | GSD |
 | Numerical data | NumPy, HDF5, CSV |
 | Mesh processing | trimesh, NumPy, optional OpenCascade |
 | Analysis | freud, NumPy, SciPy |
-| Desktop packaging | Tauri or Electron with a managed Python sidecar |
-| Testing | Pytest, Vitest, Playwright |
+| Static deployment | GitHub Pages |
+| Python-backed deployment | Containerized service or local Python process |
+| Testing | Pytest and Playwright, with lightweight JavaScript unit tests |
 
-A Python-only PySide6 prototype is also viable for early experiments. The React/Three.js split is preferable for a polished CAD-like interface and large interactive viewports.
+The initial demo should avoid a mandatory frontend build system. A visitor or contributor should be able to serve the `web/` directory with a basic static HTTP server. A framework can be introduced later if the UI grows beyond what small JavaScript modules can manage cleanly.
 
 ## Suggested Project Layout
 
 ```text
 hoomd-gui/
-|- frontend/
-|  |- src/
-|  |  |- components/
-|  |  |- viewport/
-|  |  |- inspectors/
-|  |  |- state/
-|  |  `- api/
-|  `- tests/
-|- backend/
-|  |- hoomd_gui/
+|- web/
+|  |- index.html
+|  |- styles/
+|  |  `- app.css
+|  |- js/
+|  |  |- app.js
+|  |  |- project-store.js
+|  |  |- viewport.js
+|  |  |- inspectors.js
+|  |  |- interaction-editor.js
+|  |  `- api-client.js
+|  `- assets/
+|- python/
+|  |- hoomd_gui_core/
 |  |  |- schema/
 |  |  |- geometry/
 |  |  |- validation/
+|  |  |- interactions/
 |  |  |- compiler/
 |  |  |- runner/
 |  |  `- analysis/
 |  `- tests/
+|- server/
+|  |- app.py
+|  `- tests/
 |- examples/
 |- docs/
-`- packaging/
+`- pyproject.toml
 ```
 
 ## Project File Layout
@@ -531,17 +594,33 @@ Each run directory should preserve a snapshot of the settings used for that run.
 
 ## Development Roadmap
 
-### Phase 0 — Specification and Experiments
+### Phase 0 — Interface Contract and Experiments
 
 - Define the versioned project schema.
+- Define the JSON API boundary between the web interface and Python core.
 - Pin the first supported HOOMD-blue version.
 - Prototype Python code generation.
 - Prototype the safe expression parser, symbolic derivative, and table compiler for custom pair interactions.
 - Benchmark Three.js particle instancing.
-- Test worker-process control and live logging.
+- Create a minimal HTML/CSS/JavaScript viewport experiment.
 - Define scientific validation cases.
 
-### Phase 1 — Molecular Dynamics MVP
+### Phase 1 — Public Static Web Demo
+
+- Single-page HTML interface with no mandatory build step.
+- Responsive scene tree, viewport, inspector, and bottom timeline layout.
+- Three.js box, particle, wall, camera, and selection visualization.
+- Browser-side project store following the versioned schema.
+- Basic object transforms, layers, particle types, and property editing.
+- Built-in and expression-based custom-potential forms.
+- Potential and force graph preview.
+- Generated HOOMD-blue code preview using a demo template.
+- Bundled example projects and prerecorded trajectories.
+- JSON import and export.
+- Clear visual labeling that simulations are illustrative in Static Demo Mode.
+- Public deployment through GitHub Pages.
+
+### Phase 2 — Python Core and Molecular Dynamics MVP
 
 - Project creation, save, load, and migration framework.
 - 2D/3D orthorhombic box editor.
@@ -552,10 +631,12 @@ Each run directory should preserve a snapshot of the settings used for that run.
 - NVE, thermostatted constant-volume, and Langevin integration.
 - Preflight validation.
 - Python/GSD generation.
+- FastAPI endpoints matching the project/API contract.
+- Worker-process control and live logging.
 - Local CPU/GPU execution.
 - GSD trajectory playback and basic charts.
 
-### Phase 2 — Molecular Topology and Geometry Import
+### Phase 3 — Molecular Topology and Geometry Import
 
 - Bonds, angles, dihedrals, constraints, and rigid bodies.
 - STL/OBJ import.
@@ -565,7 +646,7 @@ Each run directory should preserve a snapshot of the settings used for that run.
 - Checkpoint continuation and reusable simulation templates.
 - CSV/table import and reusable custom-interaction library entries.
 
-### Phase 3 — Advanced HOOMD Modes
+### Phase 4 — Advanced HOOMD Modes
 
 - HPMC shape and interaction editors.
 - Flexible particle meshes.
@@ -577,7 +658,7 @@ Each run directory should preserve a snapshot of the settings used for that run.
 - MPCD workflows.
 - Parameter sweeps and comparison views.
 
-### Phase 4 — Production and Remote Computing
+### Phase 5 — Production and Remote Computing
 
 - STEP/IGES import through a CAD kernel.
 - Signed-distance custom boundaries.
@@ -586,20 +667,22 @@ Each run directory should preserve a snapshot of the settings used for that run.
 - Containerized reproducible environments.
 - Compiled CPU/GPU plugin API for custom potentials, generators, validators, and analyses.
 
-## MVP Acceptance Scenario
+## First Web Demo Acceptance Scenario
 
-The MVP is successful when a user can complete the following without editing Python:
+The first public demonstration is successful when a visitor can complete the following from a URL without installing any software:
 
 1. Create a 3D simulation box.
-2. Fill it with two particle types.
+2. Add or generate particles of two different types.
 3. Assign different colors and diameters.
 4. Configure A-A and B-B built-in interactions and define a custom `U(r)` interaction for A-B.
-5. Select a thermostatted integration method and set `kT`, `dt`, and the number of steps.
-6. Run preflight validation and resolve all errors.
-7. Preview and export the generated HOOMD-blue script.
-8. Run the simulation on an available device.
-9. Watch progress and live thermodynamic values.
-10. Replay the resulting GSD trajectory and export a chart.
+5. Inspect the corresponding potential and force curves.
+6. Set `kT`, `dt`, and the number of steps.
+7. See browser-side validation feedback.
+8. Preview the proposed HOOMD-blue script.
+9. Play a clearly labeled sample trajectory.
+10. Download the project JSON and share the demo URL.
+
+The next Python-connected milestone adds authoritative validation, real code generation, local CPU/GPU execution, live thermodynamic values, and GSD result playback without changing the project format or main web interface.
 
 ## Non-Goals for the Initial Release
 
@@ -608,6 +691,8 @@ The MVP is successful when a user can complete the following without editing Pyt
 - General computational fluid dynamics.
 - Arbitrary triangle meshes as native collision walls without conversion.
 - Support for every HOOMD-blue operation in the first release.
+- Running HOOMD-blue directly inside the static browser demo.
+- Requiring a Python installation merely to view the public demonstration.
 - Silent conversion between physical and reduced units.
 - Hiding generated code or preventing expert users from leaving the GUI.
 
