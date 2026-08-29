@@ -1,0 +1,31 @@
+[workspace]
+name = "hoomd-gui"
+version = "0.1.0"
+description = "Local development environment for the HOOMD GUI scientific core"
+channels = ["conda-forge"]
+platforms = ["osx-arm64"]
+
+[dependencies]
+python = "3.12.*"
+hoomd = { version = "==7.1.0", build = "*cpu*" }
+numpy = ">=2.0,<3"
+pydantic = ">=2.10,<3"
+fastapi = ">=0.115,<1"
+uvicorn = ">=0.34,<1"
+httpx = ">=0.28,<1"
+pytest = ">=8.3,<9"
+ruff = ">=0.11,<1"
+mypy = ">=1.15,<2"
+hatchling = ">=1.27,<2"
+
+[pypi-dependencies]
+hoomd-gui-core = { path = ".", editable = true }
+
+[tasks]
+check-environment = "python scripts/check_environment.py"
+test = "pytest"
+lint = "ruff check ."
+format = "ruff format ."
+format-check = "ruff format --check ."
+type-check = "mypy python scripts tests"
+check = { depends-on = ["check-environment", "lint", "format-check", "type-check", "test"] }

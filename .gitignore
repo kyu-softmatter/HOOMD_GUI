@@ -1,2 +1,25 @@
 # Local planning notes
 plan.ko.md
+
+# Pixi environments
+.pixi/
+
+# Python caches and build artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+build/
+dist/
+.venv/
+
+# Local simulation outputs
+outputs/
+*.gsd
+
+# Operating system files
+.DS_Store

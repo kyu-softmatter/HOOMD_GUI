@@ -5,10 +5,7 @@ import hashlib
 import re
 from pathlib import Path
 
-
-MARKER_PATTERN = re.compile(
-    r"<!-- plan\.ko\.md sha256: [0-9a-f]{64} -->"
-)
+MARKER_PATTERN = re.compile(r"<!-- plan\.ko\.md sha256: [0-9a-f]{64} -->")
 
 
 def parse_arguments() -> argparse.Namespace:

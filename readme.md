@@ -3,17 +3,53 @@
 > [!IMPORTANT]
 > **IDEA SKETCH / CONCEPT DOCUMENT**
 >
-> This repository presents an early product idea and technical design proposal. It does not contain a functional application yet, and all features, architecture choices, and roadmap items are subject to change.
+> This repository presents an early product idea and technical design proposal. It contains an initial development-environment and Python-package skeleton, but not a functional GUI. All features, architecture choices, and roadmap items are subject to change.
 
 > A CAD-inspired visual environment for building, running, and analyzing HOOMD-blue particle simulations.
 
 ## Project Status
 
-This repository currently describes a product concept and implementation roadmap. The application has not been implemented yet.
+This repository currently contains the product concept, implementation roadmap, and the first verified development-environment milestone. The scientific package is only a skeleton and the application UI has not been implemented yet.
 
 The first planned deliverable is a lightweight public web demonstration that runs in a standard browser without installation. The scientific core will remain a reusable Python package and will be connected to the web interface through an API in a later milestone.
 
-The initial compatibility target is HOOMD-blue 7.x. Each application release should pin and test an exact HOOMD-blue version so that generated scripts remain reproducible.
+The initial compatibility target is the CPU build of HOOMD-blue 7.1.0 on macOS ARM64 with Python 3.12. Each application release should pin and test an exact HOOMD-blue version so that generated scripts remain reproducible.
+
+## Development Setup
+
+The first supported development platform is macOS ARM64. Install [Pixi](https://pixi.sh/latest/installation/), then create the locked environment:
+
+```bash
+pixi install --locked
+```
+
+Run the complete environment and quality check:
+
+```bash
+pixi run check
+```
+
+The `check` task verifies:
+
+- Python and core dependency versions.
+- Import of the editable `hoomd_gui_core` package.
+- Creation of a HOOMD-blue CPU `Simulation` object.
+- Optional GPU availability without requiring a GPU.
+- Ruff lint and formatting checks.
+- Mypy strict type checking.
+- Pytest tests.
+
+Individual tasks are also available:
+
+```bash
+pixi run check-environment
+pixi run lint
+pixi run format-check
+pixi run type-check
+pixi run test
+```
+
+The current lockfile targets macOS ARM64 and the conda-forge CPU build of HOOMD-blue 7.1.0. Additional platforms and GPU profiles will be added only after the CPU workflow is stable.
 
 ## Overview
 

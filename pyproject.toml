@@ -1,0 +1,51 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hoomd-gui-core"
+version = "0.1.0"
+description = "Scientific project model and compiler core for HOOMD GUI"
+readme = "readme.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "numpy>=2.0,<3",
+    "pydantic>=2.10,<3",
+]
+
+[project.optional-dependencies]
+api = [
+    "fastapi>=0.115,<1",
+    "uvicorn>=0.34,<1",
+]
+dev = [
+    "httpx>=0.28,<1",
+    "mypy>=1.15,<2",
+    "pytest>=8.3,<9",
+    "ruff>=0.11,<1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["python/hoomd_gui_core"]
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-config --strict-markers"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["python", "scripts", "tests"]
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I", "UP"]
+
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "python"
+strict = true
+files = ["python", "scripts", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["hoomd", "hoomd.*"]
+ignore_missing_imports = true

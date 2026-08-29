@@ -1,6 +1,6 @@
 # HOOMD GUI Implementation Plan
 
-<!-- plan.ko.md sha256: fd9ba259edb4496796623ef3d2cb46f3e1fcd7b8d14f560a546bf77edfeb1031 -->
+<!-- plan.ko.md sha256: 48def05c27048b42680f4b84878cfa8ccaee404b7656827162197a99ef5e8844 -->
 
 > This public plan defines the initial implementation sequence for a web-based HOOMD-blue interface that executes simulations on the user's computer.
 
@@ -97,7 +97,7 @@ The first implementation task is to create a reproducible Python environment bef
 
 - Environment manager: Pixi
 - Initial Python candidate: Python 3.12
-- Initial HOOMD-blue target: 7.1.2
+- Initial HOOMD-blue target: 7.1.0
 - Package source: conda-forge
 - First platform: macOS ARM64 CPU
 - GPU environments: separate profiles after the CPU workflow is stable
@@ -770,19 +770,26 @@ A visitor should be able to:
 18. Export the project JSON.
 19. Play a clearly labeled illustrative trajectory.
 
-## 17. Immediate Next Milestone
+## 17. Milestone Status
 
-The next implementation session will complete only the development-environment milestone.
+### 17.1 Completed: Development Environment
 
-1. Check Pixi availability.
-2. Create `pixi.toml`.
-3. Resolve and lock a HOOMD-blue 7.1.2 CPU environment.
-4. Create `pyproject.toml` and the Python package skeleton.
-5. Expand `.gitignore` for generated environment and runtime files.
-6. Add `scripts/check_environment.py`.
-7. Configure minimal Pytest, Ruff, and Mypy checks.
-8. Verify installation and imports.
-9. Document setup commands in `readme.md`.
-10. Commit and push the verified environment.
+- Created the Pixi manifest and macOS ARM64 lockfile.
+- Pinned Python 3.12 and the HOOMD-blue 7.1.0 CPU build.
+- Created the editable `hoomd_gui_core` package skeleton.
+- Verified CPU `Simulation` creation in the environment check.
+- Passed Pytest, Ruff, formatting, and Mypy checks.
+- Documented installation and verification commands in `readme.md`.
 
-Web UI implementation will not begin until this milestone passes.
+### 17.2 Next: Python Core Project Model
+
+The next implementation session will complete only the second milestone.
+
+1. Add Pydantic models for the schema version and project metadata.
+2. Add a two-dimensional simulation-box and boundary-pair model.
+3. Add particle-type and circular-particle models.
+4. Implement deterministic JSON serialization.
+5. Validate invalid box, particle, and boundary inputs.
+6. Export JSON Schema and add unit tests.
+
+Web UI implementation will not begin until the second milestone passes.
