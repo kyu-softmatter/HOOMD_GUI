@@ -1,6 +1,6 @@
 # HOOMD GUI Implementation Plan
 
-<!-- plan.ko.md sha256: d57fcc025ecd0135f92e899705bbfec92c5677b83cf67340131408168dbf7687 -->
+<!-- plan.ko.md sha256: fd9ba259edb4496796623ef3d2cb46f3e1fcd7b8d14f560a546bf77edfeb1031 -->
 
 > This public plan defines the initial implementation sequence for a web-based HOOMD-blue interface that executes simulations on the user's computer.
 
@@ -203,6 +203,7 @@ The first schema will include:
 
 - Project name and schema version.
 - A two-dimensional simulation box.
+- Per-axis periodic settings and per-face wall definitions.
 - Particle types.
 - Circular particle positions and diameters.
 - Custom attribute definitions and per-particle custom attribute values.
@@ -228,6 +229,7 @@ The first schema will include:
 
 - Example projects round-trip between Python objects and JSON.
 - Invalid box, particle, interaction, and run values are rejected.
+- Mismatched periodic face pairs and unsafe wall padding are rejected.
 - Identical inputs produce identical serialized output.
 - Custom attributes survive project import and export without loss.
 - Invalid, duplicate, or reserved attribute keys and non-finite values are rejected.
@@ -256,6 +258,8 @@ Three.js may be introduced later when three-dimensional editing becomes a real r
 - Grid, zoom, and pan.
 - Add circular particles by clicking.
 - Select, drag, duplicate, and delete particles.
+- Inspect and edit the periodic state of every box face.
+- Preview linked opposite faces and periodic particle images.
 - Place, select, drag, duplicate, and delete external potential wells.
 - Preview fixed or prescribed-velocity well motion on the timeline.
 - Multi-selection.
@@ -281,6 +285,60 @@ All particle positions must be stored in simulation coordinates, not screen pixe
 | Potential Preview | Timeline | Validation Messages            |
 +---------------------------------------------------------------+
 ```
+
+### 4.4 Face Boundary Editor
+
+Users must be able to inspect the periodic state at every simulation-box face. A periodic boundary cannot be enabled on only one face: it connects a pair of opposite faces. The UI and schema therefore operate on face pairs while still showing a control and status icon on each visible face.
+
+The two-dimensional editor provides:
+
+- `Left (-X) ↔ Right (+X)`: X periodic.
+- `Bottom (-Y) ↔ Top (+Y)`: Y periodic.
+
+A three-dimensional extension adds `Back (-Z) ↔ Front (+Z)`. Changing the periodic checkbox on one face changes its opposite face at the same time. A project with only one periodic face in a pair cannot be saved or executed.
+
+```json
+{
+  "boundaries": {
+    "x": {
+      "mode": "periodic"
+    },
+    "y": {
+      "mode": "walls",
+      "minimum": {
+        "kind": "soft",
+        "potential": "lj",
+        "padding": 2.0
+      },
+      "maximum": {
+        "kind": "soft",
+        "potential": "lj",
+        "padding": 2.0
+      }
+    }
+  }
+}
+```
+
+Boundary-editor rules:
+
+- X and Y are periodic by default in a two-dimensional project.
+- Periodic face pairs use matching patterns, connection arrows, and opposite-side particle images.
+- Disabling periodicity requires a `hardWall` or `softWall` definition on each of the two faces.
+- HPMC uses a validated hard-wall backend; MD initially uses a repulsive soft-wall backend.
+- The inspector exposes wall potential, per-particle-type parameters, and padding.
+- `Open` is not offered as an executable initial mode because it would not make particles disappear from HOOMD-blue's periodic computational box.
+- Wall-confined accessible regions and padding are validated so that particles or their periodic images cannot interact across the computational boundary within the longest pair cutoff.
+- Box resizing explicitly uses either a `relative` or `absolute` wall-position policy and previews the result.
+- Changing a boundary reruns overlap, out-of-bounds, wall-interaction, and potential-well-motion validation.
+
+HOOMD-blue simulations use a periodic computational box. Non-periodic-looking confinement is implemented with wall geometries placed inside that box, not by changing a single face of the box itself.
+
+Relevant official references:
+
+- <https://hoomd-blue.readthedocs.io/en/stable/hoomd/box.html>
+- <https://hoomd-blue.readthedocs.io/en/stable/tutorial/08-Placing-Barriers-in-the-Simulation-Box/04-Wall-potential-MD.html>
+- <https://hoomd-blue.readthedocs.io/en/stable/hoomd/md/external/module-wall.html>
 
 ## 5. Particle Types and Properties
 
@@ -494,6 +552,7 @@ WS     /api/runs/{run_id}/events
 The first real run will support:
 
 - Circular particles in a 2D orthorhombic box.
+- Fully periodic boundaries and one-axis paired-wall confinement.
 - Soft Disk MD.
 - One built-in pair potential.
 - Constant-volume thermostatted integration.
@@ -508,6 +567,7 @@ The first real run will support:
 - Progress, timestep, temperature, and energy are visible.
 - The web server remains responsive during the run.
 - The result trajectory can be replayed.
+- Particle wrapping on periodic axes and confinement on wall axes can be inspected separately.
 - Failed runs produce clear English error messages.
 
 ## 12. Custom Interactions
@@ -637,6 +697,7 @@ Relevant official HOOMD-blue references:
 - Profile-specific ranges and target particle types are validated.
 - A discontinuity in energy or force at the cutoff produces a preflight warning or error.
 - A well cannot run when its backend is unsupported by the selected simulation mode.
+- Potential-well wrapping is allowed only on axes marked periodic by the simulation box.
 - Fixed and constant-velocity Gaussian wells round-trip through the same schema.
 - The web preview and Python reference evaluator return matching `U(r)` and `F(r)` values at sample points.
 - Timeline previews and simulation timesteps produce the same well center.
@@ -654,6 +715,7 @@ Python tests:
 - Potential-well schema, motion, boundary, and round-trip tests.
 - Analytical potential-well energy and force comparisons.
 - Multiple-well field-superposition tests.
+- Boundary-pair, wall-mapping, and cutoff-padding validation tests.
 - Validator tests.
 - Generated-code golden tests.
 - Two-particle energy and force comparisons.
@@ -667,6 +729,7 @@ Web tests:
 - Custom-attribute add, edit, and remove tests.
 - Potential-well placement, dragging, parameter, and timeline tests.
 - Color-gradient scale and legend rendering tests.
+- Face-checkbox linking, periodic-image, and wall-state UI tests.
 - Primary user-flow browser tests.
 - Responsive-layout checks.
 - Keyboard-accessibility checks.
@@ -689,21 +752,23 @@ A visitor should be able to:
 
 1. Open the project from a URL without installing software.
 2. Create a two-dimensional simulation box.
-3. Add and move circular particles.
-4. Create particle types A and B.
-5. Set type colors, diameters, and masses.
-6. Add `a1 = 3.0` and `a2 = 0.3` custom attributes to a selected particle.
-7. Save, reload, edit, and remove custom attributes without losing unused values.
-8. Place a Gaussian potential well and set its depth and width.
-9. Switch the well between fixed and constant-velocity motion.
-10. Inspect its translucent energy gradient, contours, scale, and timeline preview.
-11. Configure A-A, A-B, and B-B interactions.
-12. Inspect potential and force curves.
-13. Set temperature, timestep, and step count.
-14. Resolve overlap and configuration warnings.
-15. Preview the generated HOOMD-blue script.
-16. Export the project JSON.
-17. Play a clearly labeled illustrative trajectory.
+3. Inspect the periodic state of all four faces and switch one opposite-face pair to walls.
+4. Preview periodic particle images and visually distinguish wall-confined faces.
+5. Add and move circular particles.
+6. Create particle types A and B.
+7. Set type colors, diameters, and masses.
+8. Add `a1 = 3.0` and `a2 = 0.3` custom attributes to a selected particle.
+9. Save, reload, edit, and remove custom attributes without losing unused values.
+10. Place a Gaussian potential well and set its depth and width.
+11. Switch the well between fixed and constant-velocity motion.
+12. Inspect its translucent energy gradient, contours, scale, and timeline preview.
+13. Configure A-A, A-B, and B-B interactions.
+14. Inspect potential and force curves.
+15. Set temperature, timestep, and step count.
+16. Resolve overlap and configuration warnings.
+17. Preview the generated HOOMD-blue script.
+18. Export the project JSON.
+19. Play a clearly labeled illustrative trajectory.
 
 ## 17. Immediate Next Milestone
 
