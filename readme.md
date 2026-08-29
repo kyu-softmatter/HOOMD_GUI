@@ -1,5 +1,10 @@
 # HOOMD GUI
 
+> [!IMPORTANT]
+> **IDEA SKETCH / CONCEPT DOCUMENT**
+>
+> This repository presents an early product idea and technical design proposal. It does not contain a functional application yet, and all features, architecture choices, and roadmap items are subject to change.
+
 > A CAD-inspired visual environment for building, running, and analyzing HOOMD-blue particle simulations.
 
 ## Project Status
