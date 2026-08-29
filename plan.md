@@ -1,6 +1,6 @@
 # HOOMD GUI Implementation Plan
 
-<!-- plan.ko.md sha256: 043f88ca89c7f4ff674473eda04a9817a4601ad78c0290d19f9e0e7534c3822b -->
+<!-- plan.ko.md sha256: 7272e9366a541d917b739415c0f146759cb3948e39849684dfb96c222795e4c1 -->
 
 > This public plan defines the initial implementation sequence for a web-based HOOMD-blue interface that executes simulations on the user's computer.
 
@@ -204,6 +204,7 @@ The first schema will include:
 - A two-dimensional simulation box.
 - Particle types.
 - Circular particle positions and diameters.
+- Custom attribute definitions and per-particle custom attribute values.
 - Display layers.
 - Type-pair interactions.
 - Simulation mode.
@@ -226,6 +227,8 @@ The first schema will include:
 - Example projects round-trip between Python objects and JSON.
 - Invalid box, particle, interaction, and run values are rejected.
 - Identical inputs produce identical serialized output.
+- Custom attributes survive project import and export without loss.
+- Invalid, duplicate, or reserved attribute keys and non-finite values are rejected.
 - A minimal project generates a readable HOOMD-blue script.
 - Models, validation, serialization, and code generation have tests.
 
@@ -302,7 +305,42 @@ Initial properties:
 - Fixed or mobile state.
 - Display layer.
 
-Per-particle physical overrides will be considered after the type-based compiler is stable.
+Per-particle physical overrides will be considered after the type-based compiler is stable. Arbitrary per-particle metadata is supported separately through custom attributes.
+
+### 5.1 Per-Particle Custom Attributes
+
+Each particle may have multiple user-defined attributes in addition to its built-in physical fields. For example, a selected particle may define `a1 = 3.0` and `a2 = 0.3`. Custom attributes do not affect a simulation automatically. Future filters, color mappings, selection groups, analysis tools, custom interactions, or code generators may consume them explicitly.
+
+The initial data model will use:
+
+- A project-level `attributeDefinitions` registry containing each key, data type, default value, optional unit, and description.
+- A per-particle `customAttributes` mapping that stores values that differ from their defaults.
+- Finite numeric scalars as the only editable type in the first version.
+- An extensible schema that can later add integer, boolean, string, and vector values.
+- Attribute keys matching `[A-Za-z_][A-Za-z0-9_]*`, with no duplicate keys on one particle.
+- Reserved-name validation for built-in fields such as `id`, `type`, `position`, `diameter`, and `mass`.
+- Deterministic serialization independent of the order in which attributes were entered.
+- Lossless round trips for attributes that are stored but not yet consumed by another feature.
+
+```json
+{
+  "attributeDefinitions": {
+    "a1": { "type": "number", "default": 0.0 },
+    "a2": { "type": "number", "default": 0.0 }
+  },
+  "particles": [
+    {
+      "id": "p-001",
+      "type": "A",
+      "customAttributes": { "a1": 3.0, "a2": 0.3 }
+    }
+  ]
+}
+```
+
+The particle inspector will provide an `Add Attribute` button and editable rows for the key and value, with a remove action on each row. It will also indicate whether an attribute is only stored or is currently consumed by another feature. Bulk editing for multiple selected particles can follow after the single-particle workflow is stable.
+
+The design must not assume that arbitrary fields can be added directly to a standard HOOMD-blue Snapshot. Custom attributes remain in the project JSON unless a compiler or plugin explicitly converts them into HOOMD input arrays, groups, force calculations, or logged data.
 
 ## 6. Simulation Modes
 
@@ -498,6 +536,7 @@ Executable custom Python or native plugins must never run without explicit user 
 Python tests:
 
 - Model and serializer tests.
+- Custom-attribute schema, validation, and round-trip tests.
 - Validator tests.
 - Generated-code golden tests.
 - Two-particle energy and force comparisons.
@@ -508,6 +547,7 @@ Web tests:
 
 - Project-store tests.
 - JSON import/export tests.
+- Custom-attribute add, edit, and remove tests.
 - Primary user-flow browser tests.
 - Responsive-layout checks.
 - Keyboard-accessibility checks.
@@ -533,13 +573,15 @@ A visitor should be able to:
 3. Add and move circular particles.
 4. Create particle types A and B.
 5. Set type colors, diameters, and masses.
-6. Configure A-A, A-B, and B-B interactions.
-7. Inspect potential and force curves.
-8. Set temperature, timestep, and step count.
-9. Resolve overlap and configuration warnings.
-10. Preview the generated HOOMD-blue script.
-11. Export the project JSON.
-12. Play a clearly labeled illustrative trajectory.
+6. Add `a1 = 3.0` and `a2 = 0.3` custom attributes to a selected particle.
+7. Save, reload, edit, and remove custom attributes without losing unused values.
+8. Configure A-A, A-B, and B-B interactions.
+9. Inspect potential and force curves.
+10. Set temperature, timestep, and step count.
+11. Resolve overlap and configuration warnings.
+12. Preview the generated HOOMD-blue script.
+13. Export the project JSON.
+14. Play a clearly labeled illustrative trajectory.
 
 ## 16. Immediate Next Milestone
 
