@@ -1,6 +1,6 @@
 # HOOMD GUI Implementation Plan
 
-<!-- plan.ko.md sha256: 7272e9366a541d917b739415c0f146759cb3948e39849684dfb96c222795e4c1 -->
+<!-- plan.ko.md sha256: d57fcc025ecd0135f92e899705bbfec92c5677b83cf67340131408168dbf7687 -->
 
 > This public plan defines the initial implementation sequence for a web-based HOOMD-blue interface that executes simulations on the user's computer.
 
@@ -180,6 +180,7 @@ python/hoomd_gui_core/
 |  |- box.py
 |  |- particle.py
 |  |- interaction.py
+|  |- potential_well.py
 |  `- run.py
 |- validation/
 |  |- issues.py
@@ -205,6 +206,7 @@ The first schema will include:
 - Particle types.
 - Circular particle positions and diameters.
 - Custom attribute definitions and per-particle custom attribute values.
+- External potential wells and their prescribed motion.
 - Display layers.
 - Type-pair interactions.
 - Simulation mode.
@@ -254,6 +256,8 @@ Three.js may be introduced later when three-dimensional editing becomes a real r
 - Grid, zoom, and pan.
 - Add circular particles by clicking.
 - Select, drag, duplicate, and delete particles.
+- Place, select, drag, duplicate, and delete external potential wells.
+- Preview fixed or prescribed-velocity well motion on the timeline.
 - Multi-selection.
 - Direct coordinate input.
 - Overlap and out-of-bounds highlighting.
@@ -271,6 +275,7 @@ All particle positions must be stored in simulation coordinates, not screen pixe
 | Scene Tree  | Simulation View            | Inspector          |
 | Box         |                            | Transform          |
 | Particles   |                            | Type / Diameter    |
+| Wells       |                            | Well Settings      |
 | Layers      |                            | Box / Run Settings |
 +-------------+----------------------------+--------------------+
 | Potential Preview | Timeline | Validation Messages            |
@@ -463,6 +468,7 @@ GET    /api/schema
 POST   /api/projects/validate
 POST   /api/projects/compile
 POST   /api/interactions/preview
+POST   /api/potential-wells/preview
 POST   /api/runs
 GET    /api/runs/{run_id}
 DELETE /api/runs/{run_id}
@@ -531,12 +537,123 @@ Later extensions may include table import, custom bonded interactions, anisotrop
 
 Executable custom Python or native plugins must never run without explicit user approval.
 
-## 13. Testing and Quality
+## 13. External Potential Wells
+
+An external potential well is a scene object that applies a position-dependent force around a prescribed center. Unlike a particle, it has no mass, collision response, or thermostat dynamics. It remains fixed or follows a user-defined trajectory.
+
+### 13.1 Data Model
+
+Each well will define:
+
+- A stable ID, name, enabled state, and display layer.
+- An initial center position.
+- A motion mode: `fixed` or `constantVelocity`.
+- A velocity vector and reference timestep.
+- A boundary mode: `periodic`, `clamp`, or `free`.
+- A potential profile: `gaussian`, `harmonic`, or `customRadial`.
+- Profile-specific `depth`, `width`, `stiffness`, and `cutoff` values.
+- Target particle types or a named selection.
+- An optional coupling multiplier per particle type.
+- A display color, maximum opacity, and contour-display option.
+
+Constant-velocity motion is defined by `center(step) = center0 + velocity * dt * (step - referenceStep)`, with velocity displayed in length-per-time units. In `periodic` mode, force evaluation uses the minimum-image distance and the display position wraps into the simulation box. `clamp` stops the center at the box boundary, while `free` allows it to continue outside. The editor warns that `free` motion can produce a discontinuous field at the boundary of a periodic particle system.
+
+```json
+{
+  "potentialWells": [
+    {
+      "id": "well-001",
+      "name": "Moving Trap",
+      "center": [0.0, 0.0],
+      "motion": {
+        "mode": "constantVelocity",
+        "velocity": [0.1, 0.0],
+        "boundary": "periodic",
+        "referenceStep": 0
+      },
+      "profile": {
+        "kind": "gaussian",
+        "depth": 3.0,
+        "width": 1.2,
+        "cutoff": 4.0
+      },
+      "targets": {
+        "particleTypes": ["A"],
+        "coupling": 1.0
+      },
+      "display": {
+        "color": "#7C3AED",
+        "maxOpacity": 0.45,
+        "showContours": true
+      }
+    }
+  ]
+}
+```
+
+### 13.2 Potential Profiles
+
+- The first built-in profile will be an attractive Gaussian well: `U(r) = -depth * exp(-r^2 / (2 * width^2))`.
+- The Gaussian editor accepts `Depth` and `Width` and reports a derived `Peak Force` as its strength metric.
+- A harmonic profile uses `Stiffness` and explicitly defines its energy zero and cutoff behavior.
+- `customRadial` accepts only a restricted `U(r)` expression or validated table.
+- The force must remain consistent with `F(r) = -dU/dr`.
+- External potentials and forces from overlapping wells add together.
+- A negative type-coupling multiplier can reverse attractive and repulsive behavior and therefore requires a clear warning.
+
+### 13.3 Viewport Visualization
+
+- A well uses a handle and icon that cannot be confused with a particle.
+- A translucent color gradient represents local potential energy, becoming more saturated or opaque near deeper regions.
+- Changes in width or stiffness alter the spatial gradient.
+- The inspector shows depth, the profile-specific width or stiffness, and a derived peak-force strength.
+- The viewport displays a color scale, energy unit, minimum, and maximum.
+- Users can switch between an individual-well view and the summed total field.
+- Overlapping wells are visualized by recomputing the summed field rather than relying only on alpha blending.
+- Potential energy and force magnitude are separate view modes.
+- Timeline motion in the static demo is labeled `Illustrative Preview`, not a simulation result.
+
+The renderer should sample the scalar field on a bounded grid, cache unchanged results, and use a deterministic color map. Rendering resolution must be independent from simulation resolution and presented as a display-quality setting only.
+
+### 13.4 HOOMD-blue Execution Strategy
+
+- The first executable scope is Soft Disk MD on the CPU.
+- A fixed Gaussian well compiles to a position-dependent external force.
+- A moving well computes its center from the timestep inside a custom force, or updates required parameters with a `CustomUpdater`.
+- Standard wall potentials depend on distance to a surface and must not be treated as a substitute for a point-centered well.
+- User expressions never generate or execute arbitrary Python code.
+- Large-system and GPU execution remain unsupported or display a clear performance warning until a validated C++/GPU plugin backend exists.
+- HPMC support follows only after a separate external-potential backend is validated.
+
+Relevant official HOOMD-blue references:
+
+- <https://hoomd-blue.readthedocs.io/en/stable/hoomd/md/module-external.html>
+- <https://hoomd-blue.readthedocs.io/en/trunk-major/howto/custom-md-potential.html>
+- <https://hoomd-blue.readthedocs.io/en/trunk-major/howto/continuously-vary-potential-parameters.html>
+
+### 13.5 Acceptance Criteria
+
+- Center, velocity, depth, width, stiffness, and cutoff values reject `NaN` and infinity.
+- Profile-specific ranges and target particle types are validated.
+- A discontinuity in energy or force at the cutoff produces a preflight warning or error.
+- A well cannot run when its backend is unsupported by the selected simulation mode.
+- Fixed and constant-velocity Gaussian wells round-trip through the same schema.
+- The web preview and Python reference evaluator return matching `U(r)` and `F(r)` values at sample points.
+- Timeline previews and simulation timesteps produce the same well center.
+- Changing `dt` updates both the physical-time motion path and its preview.
+- Periodic-boundary handling for moving wells is consistent in visualization and force evaluation.
+- The summed energy and force from multiple wells equal the sum of independent evaluations.
+- The well-energy contribution is available as a separate log quantity.
+
+## 14. Testing and Quality
 
 Python tests:
 
 - Model and serializer tests.
 - Custom-attribute schema, validation, and round-trip tests.
+- Potential-well schema, motion, boundary, and round-trip tests.
+- Analytical potential-well energy and force comparisons.
+- Multiple-well field-superposition tests.
 - Validator tests.
 - Generated-code golden tests.
 - Two-particle energy and force comparisons.
@@ -548,6 +665,8 @@ Web tests:
 - Project-store tests.
 - JSON import/export tests.
 - Custom-attribute add, edit, and remove tests.
+- Potential-well placement, dragging, parameter, and timeline tests.
+- Color-gradient scale and legend rendering tests.
 - Primary user-flow browser tests.
 - Responsive-layout checks.
 - Keyboard-accessibility checks.
@@ -555,7 +674,7 @@ Web tests:
 
 Every new feature must include appropriate automated tests. Lint, type checking, and tests must pass before a milestone is complete.
 
-## 14. Deployment Sequence
+## 15. Deployment Sequence
 
 1. Publish the static demonstration.
 2. Validate the Python core as a local CLI.
@@ -564,7 +683,7 @@ Every new feature must include appropriate automated tests. Lint, type checking,
 5. Consider a resource-limited public Python backend only after local execution is stable.
 6. Add GPU and remote HPC features after the local CPU workflow is reliable.
 
-## 15. First Public Demo Acceptance Scenario
+## 16. First Public Demo Acceptance Scenario
 
 A visitor should be able to:
 
@@ -575,15 +694,18 @@ A visitor should be able to:
 5. Set type colors, diameters, and masses.
 6. Add `a1 = 3.0` and `a2 = 0.3` custom attributes to a selected particle.
 7. Save, reload, edit, and remove custom attributes without losing unused values.
-8. Configure A-A, A-B, and B-B interactions.
-9. Inspect potential and force curves.
-10. Set temperature, timestep, and step count.
-11. Resolve overlap and configuration warnings.
-12. Preview the generated HOOMD-blue script.
-13. Export the project JSON.
-14. Play a clearly labeled illustrative trajectory.
+8. Place a Gaussian potential well and set its depth and width.
+9. Switch the well between fixed and constant-velocity motion.
+10. Inspect its translucent energy gradient, contours, scale, and timeline preview.
+11. Configure A-A, A-B, and B-B interactions.
+12. Inspect potential and force curves.
+13. Set temperature, timestep, and step count.
+14. Resolve overlap and configuration warnings.
+15. Preview the generated HOOMD-blue script.
+16. Export the project JSON.
+17. Play a clearly labeled illustrative trajectory.
 
-## 16. Immediate Next Milestone
+## 17. Immediate Next Milestone
 
 The next implementation session will complete only the development-environment milestone.
 
