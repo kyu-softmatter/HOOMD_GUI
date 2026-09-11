@@ -1,6 +1,6 @@
 # HOOMD GUI Implementation Plan
 
-<!-- plan.ko.md sha256: 48def05c27048b42680f4b84878cfa8ccaee404b7656827162197a99ef5e8844 -->
+<!-- plan.ko.md sha256: 6b65aae6a1e3c4715f6996cc58478e2dbf1675350be0035379e8affdd4c432e0 -->
 
 > This public plan defines the initial implementation sequence for a web-based HOOMD-blue interface that executes simulations on the user's computer.
 
@@ -270,6 +270,31 @@ Three.js may be introduced later when three-dimensional editing becomes a real r
 
 All particle positions must be stored in simulation coordinates, not screen pixels.
 
+The implemented interface lives under `web/` and needs no build step:
+
+```text
+web/
+|- index.html
+|- styles/
+|  `- app.css
+`- scripts/
+   |- main.js            entry point and toolbar wiring
+   |- store.js           observable project state, undo, redo
+   |- project.js         browser project model and deterministic serialization
+   |- analysis.js        overlap, bounds, and validation checks
+   |- viewport.js        Canvas 2D renderer and pointer input
+   |- runner-client.js   Local Runner polling and demo-mode fallback
+   |- dom.js             shared control builders
+   `- panels/
+      |- scene-tree.js
+      |- inspector.js
+      `- bottom-panel.js
+```
+
+`project.js` holds physical values only. Selection, camera, active tool, and panel
+state live in the store's separate UI state so that project files stay free of
+view-only fields.
+
 ### 4.3 Initial Layout
 
 ```text
@@ -520,8 +545,8 @@ http://127.0.0.1:8787
 Initial endpoints:
 
 ```text
-GET    /api/health
-GET    /api/version
+GET    /api/health                    implemented
+GET    /api/version                   implemented
 GET    /api/schema
 POST   /api/projects/validate
 POST   /api/projects/compile
@@ -532,6 +557,14 @@ GET    /api/runs/{run_id}
 DELETE /api/runs/{run_id}
 WS     /api/runs/{run_id}/events
 ```
+
+`GET /api/health` returns a `capabilities` list. The interface reads that list and
+only leaves static demo mode for features the runner actually implements. Endpoints
+are added to the list when they ship, so the interface never assumes a route exists.
+
+The runner lives in `python/hoomd_gui_runner/` and is started with `pixi run serve`.
+The scientific core stays free of API imports; the dependency direction is runner to
+core, never the reverse.
 
 ### 10.1 Security Requirements
 
@@ -746,6 +779,10 @@ Every new feature must include appropriate automated tests. Lint, type checking,
 5. Consider a resource-limited public Python backend only after local execution is stable.
 6. Add GPU and remote HPC features after the local CPU workflow is reliable.
 
+Steps 1 and 3 were implemented together so that the interface could be exercised
+early. The static bundle under `web/` has no runner dependency, so it can still be
+published on its own. Step 2 remains outstanding and is the next milestone.
+
 ## 16. First Public Demo Acceptance Scenario
 
 A visitor should be able to:
@@ -781,9 +818,31 @@ A visitor should be able to:
 - Passed Pytest, Ruff, formatting, and Mypy checks.
 - Documented installation and verification commands in `readme.md`.
 
-### 17.2 Next: Python Core Project Model
+### 17.2 Completed: Local Runner and Editor Interface Shell
 
-The next implementation session will complete only the second milestone.
+The original sequence placed the Python core project model second. That order was
+changed so the interface could be seen and used early: the loopback server and the
+two-dimensional editor shell were built first.
+
+- Added the `hoomd_gui_runner` package. The scientific core still does not import FastAPI.
+- Bound the runner to `127.0.0.1:8787` and implemented `GET /api/health` and `GET /api/version`.
+- Served the static web interface from the same origin, emitting no CORS headers.
+- Blocked DNS rebinding with a `Host` header allowlist.
+- Built a bundler-free ES module editor under `web/`.
+- Canvas 2D viewport with box, grid, pan, zoom, coordinate conversion, and a scale bar.
+- Particle add, select, multi-select, drag, duplicate, delete, undo, and redo.
+- Face-pair periodic and wall boundary editing with periodic-image preview.
+- Custom attribute add, edit, and remove on a selected particle, with key validation.
+- Browser-side checks for overlap, accessible-region violations, wall padding, and run parameters.
+- Deterministic JSON export and an import round trip.
+- Automatic fallback to `Static Demo Mode` when the API is unreachable.
+- Added Pytest coverage for the runner API. Ruff, formatting, Mypy, and Pytest all pass.
+
+The project model at this milestone lives only in the browser. It is not yet a Python schema.
+
+### 17.3 Next: Python Core Project Model
+
+The next implementation session will complete only the core model milestone.
 
 1. Add Pydantic models for the schema version and project metadata.
 2. Add a two-dimensional simulation-box and boundary-pair model.
@@ -792,4 +851,6 @@ The next implementation session will complete only the second milestone.
 5. Validate invalid box, particle, and boundary inputs.
 6. Export JSON Schema and add unit tests.
 
-Web UI implementation will not begin until the second milestone passes.
+The browser model must not be promoted to the authoritative source. Once the Python
+schema exists, `web/scripts/project.js` will be aligned to it and validation will move
+to `POST /api/projects/validate`.

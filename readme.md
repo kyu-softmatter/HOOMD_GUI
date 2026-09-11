@@ -3,15 +3,22 @@
 > [!IMPORTANT]
 > **IDEA SKETCH / CONCEPT DOCUMENT**
 >
-> This repository presents an early product idea and technical design proposal. It contains an initial development-environment and Python-package skeleton, but not a functional GUI. All features, architecture choices, and roadmap items are subject to change.
+> This repository presents an early product idea and technical design proposal. It contains a verified development environment, a Local Runner service, and a two-dimensional editor shell. It cannot run a simulation yet. All features, architecture choices, and roadmap items are subject to change.
 
 > A CAD-inspired visual environment for building, running, and analyzing HOOMD-blue particle simulations.
 
 ## Project Status
 
-This repository currently contains the product concept, implementation roadmap, and the first verified development-environment milestone. The scientific package is only a skeleton and the application UI has not been implemented yet.
+This repository currently contains the product concept, implementation roadmap, a verified development environment, and the first working interface milestone.
 
-The first planned deliverable is a lightweight public web demonstration that runs in a standard browser without installation. The scientific core will remain a reusable Python package and will be connected to the web interface through an API in a later milestone.
+Two milestones are complete:
+
+1. A reproducible Pixi environment with a pinned HOOMD-blue CPU build.
+2. A Local Runner service that serves a two-dimensional particle editor from a loopback address.
+
+The editor can build a project, edit box and boundary settings, place and arrange particles, attach custom attributes, run browser-side checks, and export or import project JSON. It cannot compile or execute a HOOMD-blue script yet: the `hoomd_gui_core` scientific package is still a skeleton, and the project model currently lives in the browser.
+
+The scientific core will remain a reusable Python package. The next milestone moves the project schema and its validation into that package, after which the runner becomes the authoritative validator.
 
 The initial compatibility target is the CPU build of HOOMD-blue 7.1.0 on macOS ARM64 with Python 3.12. Each application release should pin and test an exact HOOMD-blue version so that generated scripts remain reproducible.
 
@@ -48,6 +55,39 @@ pixi run format-check
 pixi run type-check
 pixi run test
 ```
+
+## Running the Interface
+
+Start the Local Runner and open the editor:
+
+```bash
+pixi run serve
+```
+
+The runner listens on <http://127.0.0.1:8787> and serves the web interface from the same origin as its API. It binds to a loopback address only, emits no CORS headers, and rejects requests whose `Host` header is not a loopback name, which blocks DNS rebinding from a browsing session on another site.
+
+Use `--host`, `--port`, and `--web-root` to override the defaults:
+
+```bash
+pixi run serve -- --port 9000
+```
+
+The interface shows `Python Connected` while the runner answers, and falls back to `Static Demo Mode` when it does not. Editing, validation feedback, and JSON export keep working in either state, so the `web/` directory can also be published as a static site with no backend.
+
+### Editor Shortcuts
+
+| Action | Shortcut |
+| --- | --- |
+| Select tool | `V` |
+| Add Particle tool | `A` |
+| Fit box in view | `F` |
+| Delete selection | `Delete` or `Backspace` |
+| Duplicate selection | `Cmd/Ctrl` + `D` |
+| Select all | `Cmd/Ctrl` + `A` |
+| Undo / Redo | `Cmd/Ctrl` + `Z` / `Shift` + `Cmd/Ctrl` + `Z` |
+| Clear selection | `Escape` |
+| Pan | Alt-drag or middle-drag |
+| Zoom | Scroll |
 
 The current lockfile targets macOS ARM64 and the conda-forge CPU build of HOOMD-blue 7.1.0. Additional platforms and GPU profiles will be added only after the CPU workflow is stable.
 

@@ -23,6 +23,7 @@ hoomd-gui-core = { path = ".", editable = true }
 
 [tasks]
 check-environment = "python scripts/check_environment.py"
+serve = "python -m hoomd_gui_runner"
 test = "pytest"
 lint = "ruff check ."
 format = "ruff format ."

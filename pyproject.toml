@@ -26,7 +26,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["python/hoomd_gui_core"]
+packages = ["python/hoomd_gui_core", "python/hoomd_gui_runner"]
 
 [tool.pytest.ini_options]
 addopts = "-ra --strict-config --strict-markers"
