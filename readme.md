@@ -7,6 +7,8 @@
 
 > A CAD-inspired visual environment for building, running, and analyzing HOOMD-blue particle simulations.
 
+> **See also:** [soft-matter-agents](https://github.com/kyu-softmatter/soft-matter-agents), a four-agent system (microscope, simulation, librarian, bridge) that designs and runs soft-matter experiments.
+
 ## Project Status
 
 This repository currently contains the product concept, implementation roadmap, a verified development environment, and the first working interface milestone.
